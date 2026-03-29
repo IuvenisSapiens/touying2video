@@ -98,7 +98,11 @@ def query(
                 assert (
                     start_from < physical_count
                 ), f"Start from {start_from + 1} is more than the number of physical slides {physical_count} in the logical slide {logical_slide}"
-                this_physical_slides[start_from]["speeches"].append(item["v"]["body"])
+                speaker_id = int(item["v"].get("speaker_id", 0) or 0)
+                body = item["v"].get("body")
+                this_physical_slides[start_from]["speeches"].append(
+                    {"body": body, "speaker_id": speaker_id}
+                )
             elif item["t"] == "T2s-duration-logical":
                 assert (
                     not is_non_defaut_duration_set
@@ -144,15 +148,33 @@ def query(
     }
 
 
+def _normalize_speech_entry(
+    speech: Union[str, Dict[str, Any], None]
+) -> Dict[str, Any]:
+    if isinstance(speech, dict):
+        body = speech.get("body") or speech.get("text") or ""
+        speaker_id = int(speech.get("speaker_id", 0) or 0)
+    elif speech is None:
+        body = ""
+        speaker_id = 0
+    else:
+        body = str(speech)
+        speaker_id = 0
+    return {"body": body, "speaker_id": speaker_id}
+
+
 def gen_speech(
-    speeches: List[str],
+    speeches: List[Union[str, Dict[str, Any]]],
 ) -> List[Dict[str, Union[str, float, AudioFileClip]]]:
     if CONFIG["tts_tool"] == "openai":
-        return gen_speech_openai(speeches)
+        normalized = [_normalize_speech_entry(s)["body"] for s in speeches]
+        return gen_speech_openai(normalized)
     elif CONFIG["tts_tool"] == "fasterqwen":
-        return gen_speech_fasterqwentts(speeches)
+        normalized = [_normalize_speech_entry(s) for s in speeches]
+        return gen_speech_fasterqwentts(normalized)
     elif CONFIG["tts_tool"] == "load":
-        return gen_speech_load(speeches)
+        normalized = [_normalize_speech_entry(s)["body"] for s in speeches]
+        return gen_speech_load(normalized)
     else:
         raise ValueError(f"Unknown TTS tool: {CONFIG['tts_tool']}")
 
@@ -196,9 +218,15 @@ def gen_speech_fasterqwentts(
         resp.raise_for_status()
 
     speech_data: List[Dict[str, Union[str, float, AudioFileClip]]] = []
-    for i, speech in enumerate(speeches):
-        print(f"Generating speech {i+1}/{len(speeches)}: {speech}")
-        if speech is None or len(speech.strip()) == 0:
+    for i, speech_entry in enumerate(speeches):
+        if not isinstance(speech_entry, dict):
+            speech_entry = _normalize_speech_entry(speech_entry)
+
+        text = speech_entry.get("body", "")
+        speaker_id = max(0, int(speech_entry.get("speaker_id", 0) or 0))
+
+        print(f"Generating speech {i+1}/{len(speeches)}: {text} (speaker_id={speaker_id})")
+        if text is None or len(str(text).strip()) == 0:
             speech_data.append(
                 {
                     "file": None,
@@ -208,17 +236,36 @@ def gen_speech_fasterqwentts(
             )
             continue
 
-        data: Dict[str, Union[str, float]] = {"text": speech, "mode": mode}
+        data: Dict[str, Union[str, float]] = {"text": str(text), "mode": mode}
         # propagate optional parameters from config
         cfg = CONFIG.get("fasterqwen", {})
-        if cfg.get("speaker"):
-            data["speaker"] = cfg["speaker"]
-        if cfg.get("instruct"):
-            data["instruct"] = cfg["instruct"]
+
+        raw_speaker = cfg.get("speaker")
+        if isinstance(raw_speaker, list):
+            if speaker_id < len(raw_speaker):
+                data["speaker"] = raw_speaker[speaker_id]
+            else:
+                data["speaker"] = raw_speaker[-1]
+        elif raw_speaker is not None:
+            data["speaker"] = raw_speaker
+
+        raw_instruct = cfg.get("instruct")
+        if isinstance(raw_instruct, list):
+            if speaker_id < len(raw_instruct):
+                data["instruct"] = raw_instruct[speaker_id]
+            else:
+                data["instruct"] = raw_instruct[-1]
+        elif raw_instruct is not None:
+            data["instruct"] = raw_instruct
 
         files = {}
-        if mode == "voice_clone" and cfg.get("ref_audio"):
-            files["ref_audio"] = open(cfg["ref_audio"], "rb")
+        if mode == "voice_clone":
+            raw_ref_audio = cfg.get("ref_audio")
+            if isinstance(raw_ref_audio, list) and len(raw_ref_audio) > 0:
+                ref_audio_path = raw_ref_audio[speaker_id] if speaker_id < len(raw_ref_audio) else raw_ref_audio[-1]
+                files["ref_audio"] = open(ref_audio_path, "rb")
+            elif raw_ref_audio is not None:
+                files["ref_audio"] = open(raw_ref_audio, "rb")
 
         r = requests.post(f"{base_url}/generate", data=data, files=files or None)
         r.raise_for_status()
