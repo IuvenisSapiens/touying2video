@@ -1,19 +1,20 @@
-tts_tool: chattts  # May be openai or peddlespeech or chattts or load
+tts_tool: fasterqwen  # May be openai, fasterqwen, or load
+
 openai:
   model: 'tts-1-hd'
   voice: 'ash'
   api_key: './api_key.txt'
   speed: 1
 
-paddlespeech:
-  lang: 'en'
-  voc: 'hifigan_ljspeech'
-  am: 'fastspeech2_ljspeech'
-
-chattts:
-  speaker: 'speaker_man_calm_2.pt'
-  speaker_save_path: null
-
+fasterqwen:                 # settings for a local FasterQWen TTS server with multi-speaker support
+  api: 'http://localhost:7860'            # base URL of the server
+  model_id: 'models/Qwen3-TTS-12Hz-1.7B-Base'
+  mode: 'voice_clone'                     # voice_clone, custom or voice_design
+  # speaker: 'Uncle_Fu'                   # required for custom mode
+  # instruct: 'Add a storyteller tone.'   # for voice_design mode
+  ref_audio: "D:/CosyVoice/参考音频/古话说：“天下大势，分久必合，合久必分。”.wav"        # for voice_clone mode
+  ref_audio_1: "D:/CosyVoice/参考音频/太阳系八大行星之一.wav"        # for voice_clone mode
+  ref_audio_2: "D:/CosyVoice/参考音频/哎，你今天有空吗？我们能不能聊聊这件事啊？.wav"        # for voice_clone mode
 
 load:
   path: './tmp_demo/'
