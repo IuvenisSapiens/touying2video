@@ -625,7 +625,32 @@ def compose_video_clip(
         # Advance the time to the next slide's
         time_played += this_duration
 
-    composite_video = CompositeVideoClip(video_clips)
+    # Filter out invalid clips to prevent MoviePy mask broadcast errors (e.g. zero-sized or zero-duration clips).
+    valid_video_clips = []
+    for clip in video_clips:
+        if clip is None:
+            continue
+        clip_width = getattr(clip, "w", None)
+        clip_height = getattr(clip, "h", None)
+        clip_duration = getattr(clip, "duration", None)
+        if (
+            clip_width is None
+            or clip_height is None
+            or clip_duration is None
+            or clip_width <= 0
+            or clip_height <= 0
+            or clip_duration <= 0
+        ):
+            print(
+                f"Skipping invalid clip in composite: width={clip_width} height={clip_height} duration={clip_duration}"
+            )
+            continue
+        valid_video_clips.append(clip)
+
+    if not valid_video_clips:
+        raise ValueError("No valid video clips to composite")
+
+    composite_video = CompositeVideoClip(valid_video_clips, size=size)
     composite_audio = CompositeAudioClip(audio_clips)
     composite_video = composite_video.with_audio(composite_audio)
     return composite_video

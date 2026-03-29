@@ -1,4 +1,4 @@
-tts_tool: fasterqwen # May be openai, fasterqwen, or load
+tts_tool: load # May be openai, fasterqwen, or load
 
 openai:
   model: "tts-1-hd"
@@ -43,12 +43,12 @@ fasterqwen: # settings for a local FasterQWen TTS server with multi-speaker supp
       "角色姓名：林怀岳音色信息：音量洪亮，音域低沉，力度感强的中年男性声音。身份背景：某国家重点科研项目首席顾问，年近七十的资深战略科学家。曾参与国家重大科技攻关工程，历经数十年风雨，见证了从落后追赶到自主创新的艰难历程。现任国家科技咨询委员会终身荣誉委员，仍坚持在一线培养青年人才，为国家战略发展建言献策。外貌特征：身形挺拔，两鬓斑白，眉宇间刻着岁月沉淀的坚毅。常着深色中山装或简洁正装，眼神沉静而锐利，举手投足间自带威严与从容。性格特质：意志如钢，信念坚定，面对挑战从不退缩；胸怀家国，心系民族未来，将个人命运与国家兴衰紧密相连；严谨自律，言出必行，话语中充满责任感与历史担当；外冷内热，表面严肃，实则对后辈寄予厚望，甘为人梯。人生信条：“我们这一代人，不是为了站在光里，而是为了把路铺到光里。”",
       "模拟成熟性感的御姐音色，声音略带磁性且沉稳，语速不快不慢，语调充满自信和一丝挑逗，尾音可以稍微拖长并上扬，给人一种游刃有余的掌控感。",
     ] # for voice_design mode
-  ref_audio:
-    [
+  ref_audio: [
       "D:/CosyVoice/参考音频/古话说：“天下大势，分久必合，合久必分。”.wav",
       "D:/CosyVoice/参考音频/太阳系八大行星之一.wav",
       "D:/CosyVoice/参考音频/哎，你今天有空吗？我们能不能聊聊这件事啊？.wav",
     ] # for voice_clone mode
 
 load:
-  path: "./tmp_demo/"
+  path: "./tmp/"
+  # path: "./tmp_demo/"
