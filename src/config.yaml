@@ -8,10 +8,10 @@ openai:
 
 fasterqwen: # settings for a local FasterQWen TTS server with multi-speaker support
   api: "http://localhost:7860" # base URL of the server
-  model_id: "models/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+  # model_id: "models/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
   # model_id: "models/Qwen3-TTS-12Hz-1.7B-Base"
-  # model_id: "models/Qwen3-TTS-12Hz-1.7B-CustomVoice"
-  mode: "voice_design" # voice_clone, custom or voice_design
+  model_id: "models/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+  mode: "custom" # voice_clone, custom or voice_design
   speaker: [
       "Vivian",
       "Serena",
@@ -32,6 +32,7 @@ fasterqwen: # settings for a local FasterQWen TTS server with multi-speaker supp
   # { id: 'Aiden',    desc: 'English — Sunny American male' },
   # { id: 'Ono_Anna', desc: 'Japanese — Playful female' },
   # { id: 'Sohee',    desc: 'Korean — Warm female' },
+  # instruct: "体现撒娇稚嫩的萝莉女声，音调偏高且起伏明显，营造出黏人、做作又刻意卖萌的听觉效果。" # for voice_design mode
   instruct: [
       "采用高亢的男性嗓音，语调随兴奋情绪不断上扬，以快速而充满活力的节奏传达信息。音量要足够响亮，近乎喊叫，以体现紧迫感。发音务必清晰精准、字字分明，让每个词都铿锵有力。整体表达需流畅自然、明亮生动，富有戏剧性，展现出外向、自信且张扬的个性，同时传递出一种威严而宏大的宣告语气，洋溢着满溢的激动之情",
       "展现出悲苦沙哑的声音质感,语速偏慢,情绪浓烈且带有哭腔,以标准普通话缓慢诉说,情感强烈,语调哀怨高亢,音高起伏大。",

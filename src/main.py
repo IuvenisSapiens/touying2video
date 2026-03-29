@@ -1,4 +1,5 @@
 import argparse
+import sys
 from pathlib import Path
 import json
 import warnings
@@ -163,6 +164,68 @@ def _normalize_speech_entry(
     return {"body": body, "speaker_id": speaker_id}
 
 
+def _warn_red(message: str):
+    # ANSI escape code for red text in most terminals
+    print(f"\033[31m{message}\033[0m", file=sys.stderr)
+    # warnings.warn(message)
+
+
+def _info_blue(message: str):
+    # ANSI escape code for blue text in most terminals
+    print(f"\033[34m{message}\033[0m", file=sys.stderr)
+
+
+def _validate_fasterqwen_config() -> None:
+    if CONFIG is None or CONFIG.get("tts_tool") != "fasterqwen":
+        return
+
+    cfg = CONFIG.get("fasterqwen", {})
+    errors = []
+
+    def check_string_list(key: str, require_exists: bool = False):
+        value = cfg.get(key)
+        if value is None:
+            return
+
+        if isinstance(value, list):
+            if len(value) == 0:
+                errors.append(f"{key} must be a nonempty list")
+                return
+            for idx, item in enumerate(value):
+                if not isinstance(item, str) or item.strip() == "":
+                    errors.append(f"{key}[{idx}] is empty or not a string")
+                elif require_exists:
+                    path = Path(item)
+                    if not path.exists():
+                        errors.append(f"{key}[{idx}] path does not exist: {item}")
+            return
+
+        if isinstance(value, str):
+            if value.strip() == "":
+                errors.append(f"{key} must be a nonempty string")
+            elif require_exists:
+                path = Path(value)
+                if not path.exists():
+                    errors.append(f"{key} path does not exist: {value}")
+            return
+
+        errors.append(f"{key} must be a string or list of strings")
+
+    # check speaker / instruct list elements
+    check_string_list("speaker")
+    check_string_list("instruct")
+
+    # ref_audio path validity (reuse check_string_list with filesystem check)
+    check_string_list("ref_audio", require_exists=True)
+
+    if errors:
+        print("\n[ERROR] FasterQWen TTS config validation failed:")
+        for msg in errors:
+            print("  -", msg)
+        print("Please fix config.yaml (ref_audio/speaker/instruct) and retry.")
+        sys.exit(1)
+
+
 def gen_speech(
     speeches: List[Union[str, Dict[str, Any]]],
 ) -> List[Dict[str, Union[str, float, AudioFileClip]]]:
@@ -237,35 +300,94 @@ def gen_speech_fasterqwentts(
             continue
 
         data: Dict[str, Union[str, float]] = {"text": str(text), "mode": mode}
-        # propagate optional parameters from config
         cfg = CONFIG.get("fasterqwen", {})
 
-        raw_speaker = cfg.get("speaker")
-        if isinstance(raw_speaker, list):
-            if speaker_id < len(raw_speaker):
-                data["speaker"] = raw_speaker[speaker_id]
-            else:
-                data["speaker"] = raw_speaker[-1]
-        elif raw_speaker is not None:
-            data["speaker"] = raw_speaker
+        files: Dict[str, Any] = {}
 
-        raw_instruct = cfg.get("instruct")
-        if isinstance(raw_instruct, list):
-            if speaker_id < len(raw_instruct):
-                data["instruct"] = raw_instruct[speaker_id]
-            else:
-                data["instruct"] = raw_instruct[-1]
-        elif raw_instruct is not None:
-            data["instruct"] = raw_instruct
+        if mode == "custom":
+            raw_speaker = cfg.get("speaker")
+            if isinstance(raw_speaker, list):
+                if speaker_id < len(raw_speaker):
+                    data["speaker"] = raw_speaker[speaker_id]
+                    _info_blue(
+                        f"speaker_id {speaker_id} maps to speaker '{raw_speaker[speaker_id]}'"
+                    )
+                else:
+                    used_speaker_id = len(raw_speaker) - 1
+                    _warn_red(
+                        f"speaker_id {speaker_id} out of range for speaker list (len={len(raw_speaker)}), "
+                        f"using index {used_speaker_id} ({raw_speaker[used_speaker_id]})"
+                    )
+                    data["speaker"] = raw_speaker[used_speaker_id]
+            elif isinstance(raw_speaker, str):
+                if speaker_id > 0:
+                    _warn_red(
+                        f"speaker_id {speaker_id} is > 0 but speaker is configured as a single string; "
+                        f"treating as fallback value ({raw_speaker})"
+                    )
+                else:
+                    _info_blue(
+                        f"speaker_id {speaker_id} maps to speaker '{raw_speaker}'"
+                    )
+                data["speaker"] = raw_speaker
 
-        files = {}
-        if mode == "voice_clone":
+        elif mode == "voice_design":
+            raw_instruct = cfg.get("instruct")
+            if isinstance(raw_instruct, list):
+                if speaker_id < len(raw_instruct):
+                    data["instruct"] = raw_instruct[speaker_id]
+                    _info_blue(
+                        f"speaker_id {speaker_id} maps to instruct '{raw_instruct[speaker_id]}'"
+                    )
+                else:
+                    used_instruct_id = len(raw_instruct) - 1
+                    _warn_red(
+                        f"speaker_id {speaker_id} out of range for instruct list (len={len(raw_instruct)}), "
+                        f"using index {used_instruct_id} ({raw_instruct[used_instruct_id]})"
+                    )
+                    data["instruct"] = raw_instruct[used_instruct_id]
+            elif isinstance(raw_instruct, str):
+                if speaker_id > 0:
+                    _warn_red(
+                        f"speaker_id {speaker_id} is > 0 but instruct is configured as a single string; "
+                        f"treating as fallback value ({raw_instruct})"
+                    )
+                else:
+                    _info_blue(
+                        f"speaker_id {speaker_id} maps to instruct '{raw_instruct}'"
+                    )
+                data["instruct"] = raw_instruct
+
+        elif mode == "voice_clone":
             raw_ref_audio = cfg.get("ref_audio")
             if isinstance(raw_ref_audio, list) and len(raw_ref_audio) > 0:
-                ref_audio_path = raw_ref_audio[speaker_id] if speaker_id < len(raw_ref_audio) else raw_ref_audio[-1]
+                if speaker_id < len(raw_ref_audio):
+                    ref_audio_path = raw_ref_audio[speaker_id]
+                    _info_blue(
+                        f"speaker_id {speaker_id} maps to ref_audio '{ref_audio_path}'"
+                    )
+                else:
+                    used_ref_audio_id = len(raw_ref_audio) - 1
+                    _warn_red(
+                        f"speaker_id {speaker_id} out of range for ref_audio list (len={len(raw_ref_audio)}), "
+                        f"using index {used_ref_audio_id} ({raw_ref_audio[used_ref_audio_id]})"
+                    )
+                    ref_audio_path = raw_ref_audio[used_ref_audio_id]
                 files["ref_audio"] = open(ref_audio_path, "rb")
-            elif raw_ref_audio is not None:
+            elif isinstance(raw_ref_audio, str):
+                if speaker_id > 0:
+                    _warn_red(
+                        f"speaker_id {speaker_id} is > 0 but ref_audio is configured as a single string; "
+                        f"treating as fallback value ({raw_ref_audio})"
+                    )
+                else:
+                    _info_blue(
+                        f"speaker_id {speaker_id} maps to ref_audio '{raw_ref_audio}'"
+                    )
                 files["ref_audio"] = open(raw_ref_audio, "rb")
+
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
 
         r = requests.post(f"{base_url}/generate", data=data, files=files or None)
         r.raise_for_status()
@@ -525,6 +647,8 @@ def main():
 
     # Create temporary directory
     Path(TMP_DIR).mkdir(exist_ok=True)
+
+    _validate_fasterqwen_config()
 
     query_results = query(args.input)
     speech_texts = [
