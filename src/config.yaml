@@ -9,9 +9,9 @@ openai:
 fasterqwen: # settings for a local FasterQWen TTS server with multi-speaker support
   api: "http://localhost:7860" # base URL of the server
   # model_id: "models/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
-  # model_id: "models/Qwen3-TTS-12Hz-1.7B-Base"
-  model_id: "models/Qwen3-TTS-12Hz-1.7B-CustomVoice"
-  mode: "custom" # voice_clone, custom or voice_design
+  model_id: "models/Qwen3-TTS-12Hz-1.7B-Base"
+  # model_id: "models/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+  mode: "voice_clone" # voice_clone, custom or voice_design
   speaker: [
       "Vivian",
       "Serena",
@@ -44,9 +44,15 @@ fasterqwen: # settings for a local FasterQWen TTS server with multi-speaker supp
       "模拟成熟性感的御姐音色，声音略带磁性且沉稳，语速不快不慢，语调充满自信和一丝挑逗，尾音可以稍微拖长并上扬，给人一种游刃有余的掌控感。",
     ] # for voice_design mode
   ref_audio: [
-      "D:/CosyVoice/参考音频/古话说：“天下大势，分久必合，合久必分。”.wav",
-      "D:/CosyVoice/参考音频/太阳系八大行星之一.wav",
-      "D:/CosyVoice/参考音频/哎，你今天有空吗？我们能不能聊聊这件事啊？.wav",
+      "D:/ReferenceAudio/古话说，天下大势，分久必合，合久必分。.wav",
+      "D:/ReferenceAudio/这是公子先前所赐！.wav",
+      "D:/ReferenceAudio/大哥的问题自然也就是我的问题！.wav",
+      "D:/ReferenceAudio/那些死去士兵的意义，将由我们来赋予。.wav",
+      "D:/ReferenceAudio/哎，你今天有空吗？我们能不能聊聊这件事啊？.wav",
+      "D:/ReferenceAudio/哥哥，你回来啦，人家等了你好久好久了，要抱抱！.wav",
+      "D:/ReferenceAudio/真正的朋友是会理解你的。你可以找个时间跟他们好好说说你的感受，也许他们就能明白了。.wav",
+      "D:/ReferenceAudio/好舍不得你啊，哥哥，你会想我吗？.mp3",
+      "D:/ReferenceAudio/在浩瀚的宇宙当中，有一颗美丽的蓝色星球叫地球。.wav",
     ] # for voice_clone mode
 
 load:

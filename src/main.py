@@ -1,17 +1,18 @@
 import argparse
-import sys
-from pathlib import Path
 import json
+import sys
 import warnings
-from typing import List, Dict, Any, Union
-from httpx import Response as HttpxBinaryResponseContent
-import yaml
+from pathlib import Path
+from typing import Any
+
 import typst
-from pdf2image import convert_from_path
-from moviepy import VideoFileClip, ImageClip, vfx
+import yaml
+from httpx import Response as HttpxBinaryResponseContent
+from moviepy import ImageClip, VideoFileClip, vfx
+from moviepy.audio.AudioClip import CompositeAudioClip
 from moviepy.audio.io.AudioFileClip import AudioFileClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-from moviepy.audio.AudioClip import CompositeAudioClip
+from pdf2image import convert_from_path
 
 # from moviepy.multithreading import multithread_write_videofile
 
@@ -47,7 +48,7 @@ def parse_args():
 
 def query(
     file: Path,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     J = json.loads(typst.query(file, "<t2s-file>", field="value", one=True))
 
     #####################
@@ -150,8 +151,8 @@ def query(
 
 
 def _normalize_speech_entry(
-    speech: Union[str, Dict[str, Any], None]
-) -> Dict[str, Any]:
+    speech: str | dict[str, Any] | None
+) -> dict[str, Any]:
     if isinstance(speech, dict):
         body = speech.get("body") or speech.get("text") or ""
         speaker_id = int(speech.get("speaker_id", 0) or 0)
@@ -227,8 +228,8 @@ def _validate_fasterqwen_config() -> None:
 
 
 def gen_speech(
-    speeches: List[Union[str, Dict[str, Any]]],
-) -> List[Dict[str, Union[str, float, AudioFileClip]]]:
+    speeches: list[str | dict[str, Any]],
+) -> list[dict[str, str | float | AudioFileClip]]:
     if CONFIG["tts_tool"] == "openai":
         normalized = [_normalize_speech_entry(s)["body"] for s in speeches]
         return gen_speech_openai(normalized)
@@ -243,8 +244,8 @@ def gen_speech(
 
 
 def gen_speech_fasterqwentts(
-    speeches: List[str],
-) -> List[Dict[str, Union[str, float, AudioFileClip]]]:
+    speeches: list[str],
+) -> list[dict[str, str | float | AudioFileClip]]:
     """Generate speech using a local FasterQWen TTS server.
 
     The function expects configuration under ``CONFIG['fasterqwen']`` with
@@ -264,6 +265,7 @@ def gen_speech_fasterqwentts(
     wrapped in a :class:`moviepy.audio.io.AudioFileClip.AudioFileClip`.
     """
     import base64
+
     import requests
 
     base_url = CONFIG.get("fasterqwen", {}).get("api", "http://localhost:7860")
@@ -280,7 +282,7 @@ def gen_speech_fasterqwentts(
         print("FasterQWen load failed with status", resp.status_code)
         resp.raise_for_status()
 
-    speech_data: List[Dict[str, Union[str, float, AudioFileClip]]] = []
+    speech_data: list[dict[str, str | float | AudioFileClip]] = []
     for i, speech_entry in enumerate(speeches):
         if not isinstance(speech_entry, dict):
             speech_entry = _normalize_speech_entry(speech_entry)
@@ -299,10 +301,10 @@ def gen_speech_fasterqwentts(
             )
             continue
 
-        data: Dict[str, Union[str, float]] = {"text": str(text), "mode": mode}
+        data: dict[str, str | float] = {"text": str(text), "mode": mode}
         cfg = CONFIG.get("fasterqwen", {})
 
-        files: Dict[str, Any] = {}
+        files: dict[str, Any] = {}
 
         if mode == "custom":
             raw_speaker = cfg.get("speaker")
@@ -413,8 +415,8 @@ def gen_speech_fasterqwentts(
 
 
 def gen_speech_openai(
-    speeches: List[str],
-) -> List[Dict[str, Union[str, float, AudioFileClip]]]:
+    speeches: list[str],
+) -> list[dict[str, str | float | AudioFileClip]]:
     from openai import OpenAI
 
     with open(CONFIG["openai"]["api_key"]) as f:
@@ -454,8 +456,8 @@ def gen_speech_openai(
 
 
 def gen_speech_load(
-    speeches: List[str],
-) -> List[Dict[str, Union[str, float, AudioFileClip]]]:
+    speeches: list[str],
+) -> list[dict[str, str | float | AudioFileClip]]:
     """
     This function will load the speech from the given path.
     """
@@ -487,7 +489,7 @@ def gen_speech_load(
     return speech_data
 
 
-def slides_to_images(file: Path, dpi=200, skip_saving=False) -> List[Path]:
+def slides_to_images(file: Path, dpi=200, skip_saving=False) -> list[Path]:
     if not skip_saving:
         images = convert_from_path(file, dpi=dpi)
     else:
@@ -502,17 +504,14 @@ def slides_to_images(file: Path, dpi=200, skip_saving=False) -> List[Path]:
 
 
 def compose_video_clip(
-    physical_slide_to_speech: List[Dict[str, Union[str, float]]],
-    physical_slide_images: List[str],
-    speech_data: List[Dict[str, Union[str, float, AudioFileClip]]],
-    typst_root_dir: Path = None,
-    transition={
-        "duration": 0.8,
-        "type": "fade",
-    },
+    physical_slide_to_speech: list[dict[str, str | float]],
+    physical_slide_images: list[str],
+    speech_data: list[dict[str, str | float | AudioFileClip]],
+    typst_root_dir: Path | None = None,
+    transition=None,
     audio_gap=0.2,
     size=(1920, 1080),
-) -> List[Dict[str, Union[str, float]]]:
+) -> list[dict[str, str | float]]:
     """This will compose the video clip
     @param physical_slide_to_speech: List of physical slides
     @param speech_data: List of speech data
@@ -522,7 +521,9 @@ def compose_video_clip(
 
     # See https://zulko.github.io/moviepy/user_guide/compositing.html
 
-    def dimension_to_absolute(dimension: Union[int, float, str], reference: int) -> int:
+    if transition is None:
+        transition = {"duration": 0.8, "type": "fade"}
+    def dimension_to_absolute(dimension: float | str, reference: int) -> int:
         if dimension is None:
             return None
         if isinstance(dimension, str):
@@ -613,12 +614,11 @@ def compose_video_clip(
             physical_slide_img, duration=this_duration + transition["duration"]
         )
         image_clip = image_clip.resized(size)
-        if physical_slide_i > 0:
-            if transition["type"] == "fade":
-                print("Adding transition")
-                image_clip = image_clip.with_effects(
-                    [vfx.CrossFadeIn(transition["duration"])]
-                )
+        if physical_slide_i > 0 and transition["type"] == "fade":
+            print("Adding transition")
+            image_clip = image_clip.with_effects(
+                [vfx.CrossFadeIn(transition["duration"])]
+            )
         image_clip = image_clip.with_start(time_played)
         video_clips.append(image_clip)
 

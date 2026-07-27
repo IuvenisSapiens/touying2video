@@ -1,6 +1,6 @@
-#import "@preview/lasaveur:0.1.4": *
+#import "@preview/lasaveur:0.1.5": *
 // Currently, a patched version of touying is needed
-#import "@preview/touying:0.6.3": *
+#import "@preview/touying:0.7.4": *
 // #import "touying/src/core.typ": *
 // patched version no longer needed
 #import "p2vmeta.typ": *
@@ -49,7 +49,7 @@
 
 #video-overlay(
   start_from: 1,
-  video: "AnimateDiff_00037.mp4",
+  video: "embedded.mp4",
   x: 0%, // relative to the slide width
   y: 0%, // relative to the slide height
   width: 50%, // relative to the slide width
@@ -117,6 +117,7 @@
       start_from: 2,
       speaker_id: 7,
     )[Its video generation speed is rather slow. This is due to the fact that it uses Movie Pai to generate videos.]
+    #t2s(
     start_from: 3, speaker_id: 8,
     )[This can be improved by using a "hacked" version of MoviePy: provided by Marcel Woo.  However, this might cause some issues if you use Baidu's PaddlePaddle as the TTS backend.]
 ]
