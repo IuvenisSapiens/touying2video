@@ -7,11 +7,14 @@ To use this tool, import `p2vmeta.typ` in your Typst file.  ~~Currently, it only
 ## Installation
 
 Install the dependencies in `requirements.txt` (a modified version of `moviepy` might be preferable, see below).
-Then, depends on which TTS backend you want to use, install the corresponding TTS package.  Currently, we support:
+Then install the package required by the TTS backend you want to use. The supported backends are:
 
-- OpenAI's (requires an API key, **Recommended** for best quality)
-- ChatTTS (local, requires a GPU, **Recommended** for local use)
-- PaddleSpeech (local, requires a GPU)
+- `openai`: OpenAI TTS (requires an API key)
+- `fasterqwen`: a local FasterQwen TTS server (supports custom speakers, voice design, and voice cloning)
+- `indextts`: a local IndexTTS Gradio server
+- `load`: use previously generated WAV files from the configured directory
+
+Select the backend with `tts_tool` in `src/config.yaml`. The backend-specific settings, such as API address, speaker, reference audio, and default language, are configured in the same file.
 
 ## Quick start
 
@@ -55,6 +58,12 @@ After compiling the Typst file, run the following command to generate the video:
 python main.py path/to/your/typst/file.typ
 ```
 
+The command reads `src/config.yaml` by default. To use another configuration file or output path:
+
+```bash
+python main.py path/to/your/typst/file.typ -c path/to/config.yaml -o output.mp4
+```
+
 ## Troubleshooting
 
 ### Feeling slow?
@@ -90,6 +99,12 @@ The following tags are provided:
   - `transition`: the transition effect between slides, currently, only `"fade"` and `"none"` are supported
   - `transition_duration`: the duration of the transition effect in seconds, if the transition is set to `"none"`, this parameter must be 0.
 - `t2s`: the content of speech
+  - `start_from`: the physical slide on which this speech starts; the default is `-1`, meaning the first physical slide.
+  - `speaker_id`: selects the speaker, voice-design instruction, or reference audio by zero-based index; the default is `0`.
+  - `language`: optional language override for this speech. It is supported by the `fasterqwen` and `indextts` backends. When omitted, the backend default in `config.yaml` is used.
+    - FasterQwen accepts `Auto`, `Chinese`, `English`, `Japanese`, `Korean`, `German`, `French`, `Russian`, `Portuguese`, `Spanish`, and `Italian`.
+    - IndexTTS accepts `Chinese`, `English`, `Japanese`, `Arabic`, and `Spanish`; these are converted to `ZH`, `EN`, `JA`, `AR`, and `ES` respectively. The backend can also receive the corresponding codes directly.
+    - Example: `#t2s(language: "English")[Hello!]`.
   - By default, a transition to a new slide with a speech will not happen until the current speech finishes.
 - `duration`: the duration of the slide in seconds
   - `logical`: the duration of the (logical) slide in seconds

@@ -102,8 +102,9 @@ def query(
                 ), f"Start from {start_from + 1} is more than the number of physical slides {physical_count} in the logical slide {logical_slide}"
                 speaker_id = int(item["v"].get("speaker_id", 0) or 0)
                 body = item["v"].get("body")
+                language = item["v"].get("language")
                 this_physical_slides[start_from]["speeches"].append(
-                    {"body": body, "speaker_id": speaker_id}
+                    {"body": body, "speaker_id": speaker_id, "language": language}
                 )
             elif item["t"] == "T2s-duration-logical":
                 assert (
@@ -156,13 +157,16 @@ def _normalize_speech_entry(
     if isinstance(speech, dict):
         body = speech.get("body") or speech.get("text") or ""
         speaker_id = int(speech.get("speaker_id", 0) or 0)
+        language = speech.get("language")
     elif speech is None:
         body = ""
         speaker_id = 0
+        language = None
     else:
         body = str(speech)
         speaker_id = 0
-    return {"body": body, "speaker_id": speaker_id}
+        language = None
+    return {"body": body, "speaker_id": speaker_id, "language": language}
 
 
 def _warn_red(message: str):
@@ -174,6 +178,27 @@ def _warn_red(message: str):
 def _info_blue(message: str):
     # ANSI escape code for blue text in most terminals
     print(f"\033[34m{message}\033[0m", file=sys.stderr)
+
+
+def _effective_speech_language(speech: dict[str, Any]) -> str | None:
+    language = speech.get("language")
+    if CONFIG is None:
+        return language
+
+    if CONFIG.get("tts_tool") == "fasterqwen":
+        return language or CONFIG.get("fasterqwen", {}).get("language", "Auto")
+
+    if CONFIG.get("tts_tool") == "indextts":
+        language = language or CONFIG.get("indextts", {}).get("lang_choice", "ZH")
+        return {
+            "Chinese": "ZH",
+            "English": "EN",
+            "Japanese": "JA",
+            "Arabic": "AR",
+            "Spanish": "ES",
+        }.get(language, language)
+
+    return language
 
 
 def _validate_fasterqwen_config() -> None:
@@ -219,11 +244,105 @@ def _validate_fasterqwen_config() -> None:
     # ref_audio path validity (reuse check_string_list with filesystem check)
     check_string_list("ref_audio", require_exists=True)
 
+    valid_languages = {
+        "Auto",
+        "Chinese",
+        "English",
+        "Japanese",
+        "Korean",
+        "German",
+        "French",
+        "Russian",
+        "Portuguese",
+        "Spanish",
+        "Italian",
+    }
+    language = cfg.get("language", "Auto")
+    if not isinstance(language, str) or language.strip() == "":
+        errors.append("language must be a nonempty string")
+    elif language not in valid_languages:
+        errors.append(
+            "language must be one of: " + ", ".join(sorted(valid_languages))
+        )
+
     if errors:
         print("\n[ERROR] FasterQWen TTS config validation failed:")
         for msg in errors:
             print("  -", msg)
-        print("Please fix config.yaml (ref_audio/speaker/instruct) and retry.")
+        print(
+            "Please fix config.yaml (fasterqwen section) and retry."
+        )
+        sys.exit(1)
+
+
+def _validate_indextts_config() -> None:
+    if CONFIG is None or CONFIG.get("tts_tool") != "indextts":
+        return
+
+    cfg = CONFIG.get("indextts", {})
+    errors = []
+
+    api = cfg.get("api", "http://localhost:7860")
+    if not isinstance(api, str) or api.strip() == "":
+        errors.append("api must be a nonempty string")
+
+    ref_audio = cfg.get("ref_audio")
+    ref_audio_paths = ref_audio if isinstance(ref_audio, list) else [ref_audio]
+    if not ref_audio_paths or any(
+        not isinstance(path, str) or path.strip() == "" for path in ref_audio_paths
+    ):
+        errors.append("ref_audio must be a nonempty string or list of strings")
+    else:
+        for index, path in enumerate(ref_audio_paths):
+            if not Path(path).exists():
+                label = f"ref_audio[{index}]" if isinstance(ref_audio, list) else "ref_audio"
+                errors.append(f"{label} path does not exist: {path}")
+
+    emo_ref_path = cfg.get("emo_ref_path")
+    if emo_ref_path is not None:
+        if not isinstance(emo_ref_path, str) or emo_ref_path.strip() == "":
+            errors.append("emo_ref_path must be a nonempty string when configured")
+        elif not Path(emo_ref_path).exists():
+            errors.append(f"emo_ref_path path does not exist: {emo_ref_path}")
+
+    valid_languages = {"ZH", "EN", "JA", "AR", "ES"}
+    if cfg.get("lang_choice", "ZH") not in valid_languages:
+        errors.append("lang_choice must be one of ZH, EN, JA, AR, ES")
+
+    valid_emo_methods = {
+        "与音色参考音频相同",
+        "使用情感参考音频",
+        "使用情感向量控制",
+    }
+    if cfg.get("emo_control_method", "与音色参考音频相同") not in valid_emo_methods:
+        errors.append("emo_control_method is not a supported IndexTTS value")
+
+    numeric_ranges = {
+        "emo_weight": (0, 1),
+        "top_p": (0, 1),
+        "temperature": (0, None),
+        "duration_factor": (0, None),
+        "top_k": (0, None),
+        "num_beams": (1, None),
+        "max_mel_tokens": (1, None),
+        "max_text_tokens_per_segment": (1, None),
+    }
+    for key, (minimum, maximum) in numeric_ranges.items():
+        value = cfg.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            errors.append(f"{key} must be a number")
+            continue
+        if value < minimum or (maximum is not None and value > maximum):
+            bound = f"{minimum}..{maximum}" if maximum is not None else f">= {minimum}"
+            errors.append(f"{key} must be in range {bound}")
+
+    if errors:
+        print("\n[ERROR] IndexTTS config validation failed:")
+        for message in errors:
+            print("  -", message)
+        print("Please fix config.yaml (indextts section) and retry.")
         sys.exit(1)
 
 
@@ -236,6 +355,9 @@ def gen_speech(
     elif CONFIG["tts_tool"] == "fasterqwen":
         normalized = [_normalize_speech_entry(s) for s in speeches]
         return gen_speech_fasterqwentts(normalized)
+    elif CONFIG["tts_tool"] == "indextts":
+        normalized = [_normalize_speech_entry(s) for s in speeches]
+        return gen_speech_indextts(normalized)
     elif CONFIG["tts_tool"] == "load":
         normalized = [_normalize_speech_entry(s)["body"] for s in speeches]
         return gen_speech_load(normalized)
@@ -255,6 +377,7 @@ def gen_speech_fasterqwentts(
     * ``model_id``: model identifier to load (default ``models/Qwen3-TTS-12Hz-1.7B-Base``).
     * ``mode``: generation mode (``voice_clone``/``custom``/``voice_design``;
        defaults to ``voice_clone``).
+     * ``language``: language passed to the TTS server (default ``Auto``).
     * ``speaker``: when using ``custom`` mode, the speaker ID.
     * ``instruct``: when using ``voice_design`` mode, the instruction text.
     * ``ref_audio``: path to a reference audio file for ``voice_clone`` mode.
@@ -273,6 +396,7 @@ def gen_speech_fasterqwentts(
         "model_id", "models/Qwen3-TTS-12Hz-1.7B-Base"
     )
     mode = CONFIG.get("fasterqwen", {}).get("mode", "voice_clone")
+    language = CONFIG.get("fasterqwen", {}).get("language", "Auto")
 
     # ensure model is loaded before generating any samples
     resp = requests.post(f"{base_url}/load", data={"model_id": model_id})
@@ -289,8 +413,12 @@ def gen_speech_fasterqwentts(
 
         text = speech_entry.get("body", "")
         speaker_id = max(0, int(speech_entry.get("speaker_id", 0) or 0))
+        speech_language = speech_entry.get("language") or language
 
-        print(f"Generating speech {i+1}/{len(speeches)}: {text} (speaker_id={speaker_id})")
+        print(
+            f"Generating speech {i+1}/{len(speeches)}: {text} "
+            f"(speaker_id={speaker_id}, language={speech_language})"
+        )
         if text is None or len(str(text).strip()) == 0:
             speech_data.append(
                 {
@@ -301,7 +429,11 @@ def gen_speech_fasterqwentts(
             )
             continue
 
-        data: dict[str, str | float] = {"text": str(text), "mode": mode}
+        data: dict[str, str | float] = {
+            "text": str(text),
+            "language": speech_language,
+            "mode": mode,
+        }
         cfg = CONFIG.get("fasterqwen", {})
 
         files: dict[str, Any] = {}
@@ -410,6 +542,116 @@ def gen_speech_fasterqwentts(
                 "duration": audio_clip.duration,
                 "audio_clip": audio_clip,
             }
+        )
+    return speech_data
+
+
+def gen_speech_indextts(
+    speeches: list[dict[str, Any]],
+) -> list[dict[str, str | float | AudioFileClip]]:
+    """Generate speech through an IndexTTS Gradio server."""
+    import shutil
+    from urllib.request import urlretrieve
+
+    from gradio_client import Client, handle_file
+
+    cfg = CONFIG.get("indextts", {})
+    client = Client(cfg.get("api", "http://localhost:7860"))
+    ref_audio = cfg.get("ref_audio")
+    if not ref_audio:
+        raise ValueError("indextts.ref_audio must be configured")
+    language_codes = {
+        "Chinese": "ZH",
+        "English": "EN",
+        "Japanese": "JA",
+        "Arabic": "AR",
+        "Spanish": "ES",
+    }
+
+    def select_reference(speaker_id: int) -> str:
+        if isinstance(ref_audio, list):
+            if not ref_audio:
+                raise ValueError("indextts.ref_audio must be a nonempty list")
+            index = min(speaker_id, len(ref_audio) - 1)
+            if index != speaker_id:
+                _warn_red(
+                    f"speaker_id {speaker_id} out of range for ref_audio list (len={len(ref_audio)}), "
+                    f"using index {index} ({ref_audio[index]})"
+                )
+            return str(ref_audio[index])
+        return str(ref_audio)
+
+    speech_data: list[dict[str, str | float | AudioFileClip]] = []
+    for i, speech_entry in enumerate(speeches):
+        text = speech_entry.get("body", "")
+        speaker_id = max(0, int(speech_entry.get("speaker_id", 0) or 0))
+        language = speech_entry.get("language") or cfg.get("lang_choice", "ZH")
+        language = language_codes.get(language, language)
+        print(
+            f"Generating speech {i+1}/{len(speeches)}: {text} "
+            f"(speaker_id={speaker_id}, language={language})"
+        )
+        if text is None or len(str(text).strip()) == 0:
+            speech_data.append({"file": None, "duration": 0, "audio_clip": None})
+            continue
+
+        reference = select_reference(speaker_id)
+        result = client.predict(
+            emo_control_method=cfg.get("emo_control_method", "与音色参考音频相同"),
+            prompt=handle_file(reference),
+            text=str(text),
+            lang_choice=language,
+            emo_ref_path=handle_file(cfg.get("emo_ref_path", reference)),
+            emo_weight=cfg.get("emo_weight", 0.65),
+            vec1=cfg.get("vec1", 0.0),
+            vec2=cfg.get("vec2", 0.0),
+            vec3=cfg.get("vec3", 0.0),
+            vec4=cfg.get("vec4", 0.0),
+            vec5=cfg.get("vec5", 0.0),
+            vec6=cfg.get("vec6", 0.0),
+            vec7=cfg.get("vec7", 0.0),
+            vec8=cfg.get("vec8", 0.0),
+            emo_text=cfg.get("emo_text", ""),
+            emo_random=cfg.get("emo_random", False),
+            max_text_tokens_per_segment=cfg.get("max_text_tokens_per_segment", 120),
+            duration_factor=cfg.get("duration_factor", 1.0),
+            param_18=cfg.get("do_sample", True),
+            param_19=cfg.get("top_p", 0.8),
+            param_20=cfg.get("top_k", 30),
+            param_21=cfg.get("temperature", 0.8),
+            param_22=cfg.get("length_penalty", 0.0),
+            param_23=cfg.get("num_beams", 3),
+            param_24=cfg.get("repetition_penalty", 10.0),
+            param_25=cfg.get("max_mel_tokens", 1500),
+            api_name="/gen_single",
+        )
+        response = result
+        if isinstance(response, (list, tuple)) and len(response) == 1:
+            response = response[0]
+        source_url = None
+        if isinstance(response, dict):
+            result = (
+                response.get("path")
+                or response.get("name")
+                or response.get("value")
+            )
+            source_url = response.get("url")
+        else:
+            result = response
+        if not isinstance(result, (str, Path)) and not isinstance(source_url, str):
+            raise RuntimeError(
+                f"unexpected IndexTTS /gen_single response: {response!r}"
+            )
+        if isinstance(result, (str, Path)):
+            source_path = Path(result)
+            out_path = Path(TMP_DIR) / f"speech_{i}{source_path.suffix or '.wav'}"
+            shutil.copyfile(source_path, out_path)
+        else:
+            out_path = Path(TMP_DIR) / f"speech_{i}.wav"
+            urlretrieve(source_url, out_path)
+        audio_clip = AudioFileClip(str(out_path))
+        speech_data.append(
+            {"file": str(out_path), "duration": audio_clip.duration, "audio_clip": audio_clip}
         )
     return speech_data
 
@@ -588,7 +830,9 @@ def compose_video_clip(
                 still_requied == 0
             ), f"Audios are not finished at slide {physical_slide_i}"
             audio_clip = speech_data[audio_started]["audio_clip"]
-            print(f"Adding into {physical_slide_i}: {speech}")
+            speech_for_log = dict(speech)
+            speech_for_log["language"] = _effective_speech_language(speech)
+            print(f"Adding into {physical_slide_i}: {speech_for_log}")
             if audio_clip is None:
                 # Empty audio, legit use as placeholder
                 audio_started += 1
@@ -674,6 +918,7 @@ def main():
     Path(TMP_DIR).mkdir(exist_ok=True)
 
     _validate_fasterqwen_config()
+    _validate_indextts_config()
 
     query_results = query(args.input)
     speech_texts = [

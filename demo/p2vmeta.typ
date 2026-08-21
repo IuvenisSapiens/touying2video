@@ -80,7 +80,7 @@
   }
 }
 
-#let t2s(start_from: -1, speaker_id: 0, body) = {
+#let t2s(start_from: -1, speaker_id: 0, language: none, body) = {
   /*
   let body = if type(body) == str {
     body
@@ -101,7 +101,7 @@
   } else {
     markup-text(body)
   }
-  [ #metadata((t: "T2s", v: (start_from: start_from, speaker_id: speaker_id, body: body))) <pdfpc> ]
+  [ #metadata((t: "T2s", v: (start_from: start_from, speaker_id: speaker_id, language: language, body: body))) <pdfpc> ]
 }
 
 // label: section number

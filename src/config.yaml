@@ -1,4 +1,4 @@
-tts_tool: load # May be openai, fasterqwen, or load
+tts_tool: indextts # May be openai, fasterqwen, indextts, or load
 
 openai:
   model: "tts-1-hd"
@@ -12,6 +12,7 @@ fasterqwen: # settings for a local FasterQWen TTS server with multi-speaker supp
   model_id: "models/Qwen3-TTS-12Hz-1.7B-Base"
   # model_id: "models/Qwen3-TTS-12Hz-1.7B-CustomVoice"
   mode: "voice_clone" # voice_clone, custom or voice_design
+  language: "Auto" # e.g. Auto, Chinese, English, Japanese, Korean, German, French, Russian, Portuguese, Spanish, Italian
   speaker: [
       "Vivian",
       "Serena",
@@ -54,6 +55,22 @@ fasterqwen: # settings for a local FasterQWen TTS server with multi-speaker supp
       "D:/ReferenceAudio/好舍不得你啊，哥哥，你会想我吗？.mp3",
       "D:/ReferenceAudio/在浩瀚的宇宙当中，有一颗美丽的蓝色星球叫地球。.wav",
     ] # for voice_clone mode
+
+indextts: # settings for an IndexTTS Gradio server
+  api: "http://localhost:7860"
+  ref_audio: [
+      "D:/ReferenceAudio/古话说，天下大势，分久必合，合久必分。.wav",
+      "D:/ReferenceAudio/这是公子先前所赐！.wav",
+      "D:/ReferenceAudio/大哥的问题自然也就是我的问题！.wav",
+      "D:/ReferenceAudio/那些死去士兵的意义，将由我们来赋予。.wav",
+      "D:/ReferenceAudio/哎，你今天有空吗？我们能不能聊聊这件事啊？.wav",
+      "D:/ReferenceAudio/哥哥，你回来啦，人家等了你好久好久了，要抱抱！.wav",
+      "D:/ReferenceAudio/真正的朋友是会理解你的。你可以找个时间跟他们好好说说你的感受，也许他们就能明白了。.wav",
+      "D:/ReferenceAudio/好舍不得你啊，哥哥，你会想我吗？.mp3",
+      "D:/ReferenceAudio/在浩瀚的宇宙当中，有一颗美丽的蓝色星球叫地球。.wav",
+    ]
+  lang_choice: "ZH"  # May be ZH, EN, ES, AR, or JA
+  # emo_ref_path: "D:/ReferenceAudio/emotion.wav"
 
 load:
   path: "./tmp/"

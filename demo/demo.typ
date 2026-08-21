@@ -42,7 +42,7 @@
 // #set heading(numbering: numbly("{1}.", default: "1.1"))
 
 #title-slide()
-#t2s(speaker_id: 0)[
+#t2s(speaker_id: 0, language: "English")[
   In this video, I am going to demonstrate the functionality of the touying to video tool.
 ]
 
