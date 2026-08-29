@@ -23,6 +23,7 @@ CONFIG = None
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=Path)
+    parser.add_argument("--root", type=Path, help="Root directory for Typst files, used to resolve relative paths", default=None)
     parser.add_argument(
         "-c", "--config", type=Path, default=Path(__file__).with_name("config.yaml")
     )
@@ -48,8 +49,9 @@ def parse_args():
 
 def query(
     file: Path,
+    root: Path | None = None,
 ) -> dict[str, Any]:
-    J = json.loads(typst.query(file, "<t2s-file>", field="value", one=True))
+    J = json.loads(typst.query(file, "<t2s-file>", field="value", one=True, root=root))
 
     #####################
     # Defaults
@@ -749,7 +751,7 @@ def compose_video_clip(
     physical_slide_to_speech: list[dict[str, str | float]],
     physical_slide_images: list[str],
     speech_data: list[dict[str, str | float | AudioFileClip]],
-    typst_root_dir: Path | None = None,
+    typst_input_dir: Path | None = None,
     transition=None,
     audio_gap=0.2,
     size=(1920, 1080),
@@ -797,7 +799,10 @@ def compose_video_clip(
             assert start_from < len(
                 physical_slide_to_speech
             ), f"Start from {start_from + 1} is more than the number of physical slides {len(physical_slide_to_speech)} in the logical slide {physical_slide}"
-            video_overlay_clip = VideoFileClip(typst_root_dir / video_overlay["video"])
+            video_overlay_clip = VideoFileClip(typst_input_dir / video_overlay["video"])
+            print("*"*100)
+            print(typst_input_dir / video_overlay["video"])
+            print("*"*100)
             video_overlay_clip = video_overlay_clip.with_start(time_played)
             video_overlay_clip = video_overlay_clip.with_layer_index(2)
             video_overlay_clip = video_overlay_clip.with_position(
@@ -920,7 +925,7 @@ def main():
     _validate_fasterqwen_config()
     _validate_indextts_config()
 
-    query_results = query(args.input)
+    query_results = query(args.input, args.root)
     speech_texts = [
         speech
         for physical_slide in query_results["physical_slide_to_speech"]
@@ -938,7 +943,7 @@ def main():
         query_results["physical_slide_to_speech"],
         physical_slide_images,
         speech_data,
-        typst_root_dir=args.input.parent,
+        typst_input_dir=args.input.parent,
         transition={
             "duration": query_results["defaults"]["transition_duration"],
             "type": query_results["defaults"]["transition"],

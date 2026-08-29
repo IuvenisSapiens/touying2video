@@ -49,7 +49,7 @@
 
 #video-overlay(
   start_from: 1,
-  video: "embedded.mp4",
+  video: "./embedded.mp4",
   x: 0%, // relative to the slide width
   y: 0%, // relative to the slide height
   width: 50%, // relative to the slide width

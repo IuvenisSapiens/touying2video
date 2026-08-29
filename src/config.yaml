@@ -1,4 +1,4 @@
-tts_tool: indextts # May be openai, fasterqwen, indextts, or load
+tts_tool: fasterqwen # May be openai, fasterqwen, indextts, or load
 
 openai:
   model: "tts-1-hd"
